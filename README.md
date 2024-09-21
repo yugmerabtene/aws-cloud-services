@@ -196,9 +196,7 @@
    - **Signification** : Gestion de sauvegarde.  
    - **Explication** : Sauvegarde et restauration centralisées des ressources AWS.
 
-2. **AWS Elastic Disaster Recovery (
-
-DRS)**  
+2. **AWS Elastic Disaster Recovery (DRS)**  
    - **Signification** : Récupération après sinistre.  
    - **Explication** : Récupération rapide des environnements en cas de sinistre.
 
