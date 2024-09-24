@@ -25,26 +25,62 @@ Créer un système de traitement de fichiers serverless en utilisant AWS Lambda,
    - Optionnellement, utiliser AWS X-Ray pour tracer et déboguer l'exécution de la fonction.
 
 ---
-
 ### Correction :
 
 #### 1. Créer un Bucket S3 :
-   - Accédez à la **Console AWS**.
-   - Allez dans **S3** et cliquez sur "Créer un Bucket".
-   - Donnez un nom unique à votre bucket (exemple : `my-lambda-trigger-bucket`) et choisissez la région.
-   - Configurez les options par défaut ou personnalisez selon vos besoins, puis cliquez sur **Créer**.
+   - **Étape** : Accédez à la **Console AWS**.
+   - **S3** : Allez dans la section S3 et cliquez sur **Créer un Bucket**.
+   - **Nom** : Donnez un nom unique à votre bucket (par exemple : `my-lambda-trigger-bucket`) et choisissez la région.
+   - **Options** : Laissez les options par défaut ou personnalisez-les selon vos besoins.
+   - **Création** : Cliquez sur **Créer**.
 
-#### 2. Créer la Fonction Lambda :
-   - Allez dans **AWS Lambda** via la console.
-   - Cliquez sur **Créer une fonction**.
-   - Sélectionnez "Créer une fonction à partir de zéro" :
-     - Nom de la fonction : `fileProcessorFunction`.
-     - Langage : Choisissez un langage supporté comme **Node.js** ou **Python**.
-     - Rôle : Utilisez un rôle existant avec les permissions S3 et CloudWatch, ou créez un nouveau rôle avec ces permissions.
-   - Cliquez sur **Créer une fonction**.
+#### 2. Créer la Fonction Lambda avec les droits appropriés :
 
-   Exemple de code pour une fonction Lambda en **Python** :
+1. **Étape 1 : Accéder à AWS Lambda**  
+   - Dans la console AWS, allez à la section **Lambda** et cliquez sur **Créer une fonction**.
+   
+2. **Étape 2 : Créer la fonction Lambda**  
+   - **Nom** : `fileProcessorFunction`.
+   - **Langage** : Choisissez un langage comme **Python** ou **Node.js**.
+   - **Rôle IAM** : Créez un rôle avec les permissions appropriées pour S3 et CloudWatch, ou utilisez un rôle existant.
 
+3. **Étape 3 : Permissions spécifiques à attribuer (important)**
+
+   - **Politique IAM pour accéder à S3 (lecture uniquement)** :
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": "s3:GetObject",
+           "Resource": "arn:aws:s3:::my-lambda-trigger-bucket/*"
+         }
+       ]
+     }
+     ```
+     - Cette politique permet à la fonction Lambda de **lire** les objets dans le bucket S3 spécifié.
+
+   - **Politique IAM pour CloudWatch (permissions d'écriture)** :
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": [
+             "logs:CreateLogGroup",
+             "logs:CreateLogStream",
+             "logs:PutLogEvents"
+           ],
+           "Resource": "*"
+         }
+       ]
+     }
+     ```
+     - Cette politique donne à Lambda l'autorisation de **créer des groupes et des flux de logs** et de **publier des événements de logs** dans CloudWatch Logs.
+
+4. **Étape 4 : Exemple de code pour la fonction Lambda (Python)** :
    ```python
    import json
    import boto3
@@ -55,7 +91,6 @@ Créer un système de traitement de fichiers serverless en utilisant AWS Lambda,
    logger.setLevel(logging.INFO)
 
    def lambda_handler(event, context):
-       # Obtenez les informations sur l'objet S3
        bucket = event['Records'][0]['s3']['bucket']['name']
        key = event['Records'][0]['s3']['object']['key']
 
@@ -64,7 +99,7 @@ Créer un système de traitement de fichiers serverless en utilisant AWS Lambda,
            response = s3.get_object(Bucket=bucket, Key=key)
            content = response['Body'].read().decode('utf-8')
 
-           # Loggez le contenu du fichier
+           # Enregistrer le contenu dans CloudWatch Logs
            logger.info(f"Contenu du fichier {key} : {content}")
            return {
                'statusCode': 200,
@@ -75,30 +110,34 @@ Créer un système de traitement de fichiers serverless en utilisant AWS Lambda,
            raise e
    ```
 
-   Ce code lit le fichier depuis S3 et enregistre son contenu dans les logs CloudWatch.
+---
 
 #### 3. Configurer le Déclencheur d'Événements S3 :
-   - Une fois la fonction Lambda créée, allez dans la section **Configuration** de la fonction.
-   - Sous **Déclencheurs**, cliquez sur **Ajouter un déclencheur**.
-   - Sélectionnez **S3** comme source de l'événement.
-   - Sélectionnez le **bucket S3** que vous avez créé.
-   - Choisissez **ObjectCreated (Put)** comme type d'événement, afin que la fonction soit déclenchée lorsqu'un fichier est ajouté au bucket.
-   - Cliquez sur **Ajouter** pour sauvegarder.
+   - **Étape 1** : Dans la console Lambda, allez dans la section **Configuration** de la fonction Lambda.
+   - **Étape 2** : Sous **Déclencheurs**, cliquez sur **Ajouter un déclencheur**.
+   - **Étape 3** : Sélectionnez **S3** comme source de l'événement.
+   - **Étape 4** : Choisissez le **bucket S3** créé (`my-lambda-trigger-bucket`).
+   - **Étape 5** : Choisissez **ObjectCreated (Put)** comme type d'événement (pour déclencher la fonction lorsqu'un fichier est ajouté au bucket).
+   - **Étape 6** : Cliquez sur **Ajouter** pour finaliser.
+
+---
 
 #### 4. Ajouter la Gestion des Erreurs :
-   - Dans la configuration de votre fonction Lambda, vous pouvez définir une **Dead Letter Queue (DLQ)** pour enregistrer les messages échoués. Cela permet de traiter les erreurs qui persistent après les tentatives de retry.
-   - Allez dans la section **Configuration** > **Avancé** et configurez une file d'attente DLQ à l’aide de **SQS** ou **SNS**.
-   - Cela garantira que les messages qui échouent après plusieurs tentatives seront stockés pour un traitement ultérieur.
+   - **Étape 1** : Utilisez une **Dead Letter Queue (DLQ)** pour enregistrer les messages échoués dans le cas où Lambda échouerait après plusieurs tentatives.
+   - **Étape 2** : Allez dans la section **Configuration > Avancé** de Lambda et configurez une file DLQ en utilisant **SQS** ou **SNS**.
+   - **Étape 3** : Cela garantira que les messages qui échouent seront stockés pour un traitement ultérieur.
+
+---
 
 #### 5. S'assurer de l'Idempotence :
-   - L’idempotence permet d’éviter le traitement multiple d’un même fichier en cas de répétition des événements.
-   - Exemple d'approche :
-     - Utiliser **DynamoDB** pour garder une trace des fichiers déjà traités.
-     - Avant de traiter un fichier, vérifier dans DynamoDB si le fichier a déjà été traité.
-     - Si le fichier a été traité, ignorer l'exécution.
+   - L’idempotence est cruciale pour éviter de traiter un fichier plusieurs fois par erreur.
+   
+1. **Étape 1 : Approche d'idempotence** :
+   - Utilisez **DynamoDB** pour stocker les informations des fichiers déjà traités.
+   - Avant de traiter un fichier, vérifiez dans DynamoDB si le fichier a déjà été traité.
+   - Si le fichier a déjà été traité, ignorez l'exécution.
 
-   Exemple d’ajout de l’idempotence au code :
-
+2. **Étape 2 : Exemple de code avec idempotence** :
    ```python
    import boto3
    dynamodb = boto3.resource('dynamodb')
@@ -123,12 +162,16 @@ Créer un système de traitement de fichiers serverless en utilisant AWS Lambda,
        table.put_item(Item={'filename': key})
    ```
 
+---
+
 #### 6. Journalisation et Surveillance :
-   - Les logs de votre fonction Lambda sont automatiquement envoyés dans **CloudWatch Logs**.
-   - Allez dans **CloudWatch** > **Logs** pour voir les logs d'exécution.
-   - Utilisez également **AWS X-Ray** pour tracer les appels et diagnostiquer les performances.
+   - **Logs** : Les logs de votre fonction Lambda sont envoyés automatiquement dans **CloudWatch Logs**.
+   - **Surveillance** : Allez dans **CloudWatch > Logs** pour voir les logs d'exécution.
+   - **Option X-Ray** : Utilisez **AWS X-Ray** pour tracer l'exécution des fonctions et diagnostiquer les performances si nécessaire.
+
+---
 
 #### Résultat attendu :
-- Chaque fois qu’un fichier est téléchargé dans le bucket S3, la fonction Lambda est déclenchée, lit le fichier, enregistre son contenu dans CloudWatch, et marque le fichier comme traité.
-- En cas d’erreurs, les messages sont envoyés dans une DLQ pour analyse future.
-- La fonction traite chaque fichier de manière idempotente, garantissant qu’un fichier n’est pas traité plusieurs fois par accident.
+- À chaque fois qu’un fichier est téléchargé dans le bucket S3, la fonction Lambda se déclenche automatiquement, lit le fichier, enregistre son contenu dans **CloudWatch Logs**, et note le fichier comme "traité" dans **DynamoDB** pour assurer l'idempotence.
+- En cas d'erreurs, une **DLQ** capture les messages échoués pour un traitement ultérieur.
+- La fonction Lambda reste idempotente, garantissant qu’un fichier n’est pas traité plusieurs fois par erreur.
