@@ -40,7 +40,7 @@ Outputs:
       Name: UsersTableARN
 ```
 
-#### Étapes de correction :
+#### Correction :
 
 1. **Création de la table** :
    Dans le fichier YAML, on utilise la ressource `AWS::DynamoDB::Table` pour créer la table DynamoDB. On définit un attribut de partition (`UserId`) et le mode de facturation `PAY_PER_REQUEST` pour éviter de spécifier manuellement la capacité.
